@@ -1,0 +1,7 @@
+pub const ZERO_CELSIUS: f32 = 273.15;
+
+pub const ABS_ZERO_CELSIUS: f32 = -ZERO_CELSIUS;
+pub const ABS_ZERO_FAHRENHEIT: f32 = -459.67;
+
+pub const DEFAULT_TEMP: f32 = ZERO_CELSIUS + 20.0;
+pub const MAX_TEMP: f32 = ZERO_CELSIUS + 100000.0;

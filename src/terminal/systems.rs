@@ -111,7 +111,6 @@ pub fn update_measures(
     }
 
     let len = measures.0.len();
-
     measures.0.truncate(len.saturating_sub(1));
 }
 

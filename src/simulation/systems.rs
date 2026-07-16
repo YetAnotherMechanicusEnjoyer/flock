@@ -51,6 +51,26 @@ pub fn spawn_initial_ship(mut commands: Commands) {
         Neighbors(vec![hallway_id]),
     ));
 
+    commands.spawn((
+        Door {
+            id_name: "D1".to_string(),
+            is_open: false,
+            room_a: reactor_id,
+            room_b: hallway_id,
+        },
+        Transform::from_xyz(-150.0, 50.0, 0.0),
+    ));
+
+    commands.spawn((
+        Door {
+            id_name: "D2".to_string(),
+            is_open: true,
+            room_a: hallway_id,
+            room_b: bridge_id,
+        },
+        Transform::from_xyz(150.0, 50.0, 0.0),
+    ));
+
     info!("Ship topology generated: Reactor <-> Hallway <-> Bridge");
 }
 

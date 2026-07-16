@@ -30,3 +30,11 @@ pub enum PowerState {
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct HullIntegrity(pub f32);
+
+#[derive(Component, Debug, Clone)]
+pub struct Door {
+    pub id_name: String,
+    pub is_open: bool,
+    pub room_a: Entity,
+    pub room_b: Entity,
+}

@@ -1,29 +1,33 @@
 use bevy::prelude::*;
 
 use crate::{
-    simulation::components::{Neighbors, Temperature, ThermalDelta},
+    simulation::components::{Door, Temperature, ThermalDelta},
     utils::consts::MAX_TEMP,
 };
 
 pub fn calculate_heat_transfer(
-    query: Query<(Entity, &Temperature, &Neighbors)>,
+    door_query: Query<&Door>,
     temp_query: Query<&Temperature>,
     mut delta_query: Query<&mut ThermalDelta>,
 ) {
-    let transfer_rate = 0.1;
+    let transfer_rate = 0.5;
 
-    for (entity, temp, neighbors) in query.iter() {
-        let mut total_heat_exchange = 0.0;
-
-        for &neighbor_entity in neighbors.0.iter() {
-            if let Ok(neighbor_temp) = temp_query.get(neighbor_entity) {
-                let difference = neighbor_temp.current - temp.current;
-                total_heat_exchange += difference * transfer_rate;
-            }
+    for door in door_query.iter() {
+        if !door.is_open {
+            continue;
         }
 
-        if let Ok(mut delta) = delta_query.get_mut(entity) {
-            delta.0 += total_heat_exchange;
+        if let (Ok(temp_a), Ok(temp_b)) = (temp_query.get(door.room_a), temp_query.get(door.room_b))
+        {
+            let difference = temp_b.current - temp_a.current;
+            let exchange = difference * transfer_rate;
+
+            if let Ok(mut delta_a) = delta_query.get_mut(door.room_a) {
+                delta_a.0 += exchange;
+            }
+            if let Ok(mut delta_b) = delta_query.get_mut(door.room_b) {
+                delta_b.0 -= exchange;
+            }
         }
     }
 }

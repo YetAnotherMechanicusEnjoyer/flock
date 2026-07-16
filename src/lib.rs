@@ -1,4 +1,6 @@
 mod core;
+mod map;
+//mod render;
 mod simulation;
 mod terminal;
 #[allow(unused)]
@@ -19,7 +21,12 @@ pub fn run() {
             ..default()
         }))
         .init_state::<AppState>()
-        .add_plugins((simulation::SimulationPlugin, terminal::TerminalPlugin))
+        .insert_resource(ClearColor(Color::BLACK))
+        .add_plugins((
+            map::MapPlugin,
+            simulation::SimulationPlugin,
+            terminal::TerminalPlugin,
+        ))
         .add_systems(Startup, |mut next_state: ResMut<NextState<AppState>>| {
             next_state.set(AppState::ActiveSimulation);
         })

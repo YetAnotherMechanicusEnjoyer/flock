@@ -4,7 +4,7 @@ pub mod systems;
 
 use crate::{
     core::state::AppState,
-    simulation::components::{PowerState, Room, Temperature},
+    simulation::components::{Door, PowerState, Room, Temperature},
     terminal::components::{PrintToMeasures, PrintToTerminal},
     utils::convert::kelvin_to_celsius,
 };
@@ -42,11 +42,16 @@ fn update_measures(
     mut printer: MessageWriter<PrintToMeasures>,
     room_query: Query<(&Room, &Temperature, &PowerState)>,
 ) {
+    let mut room_cache: Vec<&str> = Vec::new();
     for (room, temp, power) in &room_query {
+        if room_cache.contains(&room.name) {
+            continue;
+        }
         let temp_c = kelvin_to_celsius(temp.current);
 
         let status_line = format!("[{}] Temp: {:.1}°C | Power: {:?}", room.name, temp_c, power);
         printer.write(PrintToMeasures(status_line));
+        room_cache.push(room.name);
     }
 }
 
@@ -54,6 +59,7 @@ fn process_commands(
     mut command_queue: ResMut<CommandQueue>,
     mut printer: MessageWriter<PrintToTerminal>,
     room_query: Query<(&Room, &Temperature, &PowerState)>,
+    mut door_query: Query<&mut Door>,
 ) {
     if command_queue.pending.is_empty() {
         return;
@@ -78,8 +84,28 @@ fn process_commands(
             }
             parser::ParsedCommand::Help => {
                 printer.write(PrintToTerminal(
-                    "AVAILABLE COMMANDS: status, help".to_string(),
+                    "AVAILABLE COMMANDS: status, help, door".to_string(),
                 ));
+            }
+            parser::ParsedCommand::ToggleDoor(door_id) => {
+                let mut found = false;
+                for mut door in door_query.iter_mut() {
+                    if door.id_name.eq_ignore_ascii_case(&door_id) {
+                        door.is_open = !door.is_open;
+                        let state = if door.is_open { "OPENED" } else { "CLOSED" };
+                        printer.write(PrintToTerminal(format!(
+                            "DOOR {} IS NOW {state}.",
+                            door.id_name
+                        )));
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    printer.write(PrintToTerminal(format!(
+                        "ERROR: DOOR '{door_id}' NOT FOUND.",
+                    )));
+                }
             }
             parser::ParsedCommand::Unknown(cmd) => {
                 printer.write(PrintToTerminal(format!("COMMAND NOT FOUND: {}", cmd)));

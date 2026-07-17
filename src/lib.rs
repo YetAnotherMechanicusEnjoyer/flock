@@ -1,6 +1,6 @@
 mod core;
 mod map;
-//mod render;
+mod render;
 mod simulation;
 mod terminal;
 #[allow(unused)]
@@ -14,16 +14,17 @@ pub fn run() {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Flock - Terminal".into(),
-                resolution: WindowResolution::new(1280, 720),
+                resolution: WindowResolution::new(1920, 1080),
                 present_mode: bevy::window::PresentMode::AutoNoVsync,
                 ..default()
             }),
             ..default()
         }))
         .init_state::<AppState>()
-        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(ClearColor(Color::srgb(0.06, 0.06, 0.06)))
         .add_plugins((
             map::MapPlugin,
+            render::RenderPlugin,
             simulation::SimulationPlugin,
             terminal::TerminalPlugin,
         ))

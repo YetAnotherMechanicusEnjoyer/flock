@@ -1,5 +1,4 @@
 pub mod components;
-pub mod generation;
 pub mod render;
 
 use crate::core::state::AppState;
@@ -10,14 +9,9 @@ pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MapGenConfig>()
-            .add_systems(
-                OnEnter(AppState::ActiveSimulation),
-                generation::generate_ship_layout,
-            )
-            .add_systems(
-                Update,
-                render::render_map.run_if(in_state(AppState::ActiveSimulation)),
-            );
+        app.init_resource::<MapGenConfig>().add_systems(
+            Update,
+            render::render_map.run_if(in_state(AppState::ActiveSimulation)),
+        );
     }
 }

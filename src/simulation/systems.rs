@@ -1,4 +1,7 @@
-use crate::utils::consts::{MAX_TEMP, ZERO_CELSIUS};
+use crate::{
+    map::components::RoomLayout,
+    utils::consts::{MAX_TEMP, ZERO_CELSIUS},
+};
 
 use super::components::*;
 use bevy::prelude::*;
@@ -7,7 +10,7 @@ pub fn spawn_initial_ship(mut commands: Commands) {
     let reactor_id = commands.spawn_empty().id();
     let hallway_id = commands.spawn_empty().id();
     let bridge_id = commands.spawn_empty().id();
-    let target = ZERO_CELSIUS + 20.0;
+    let target = ZERO_CELSIUS;
 
     commands.entity(reactor_id).insert((
         Room {
@@ -21,6 +24,11 @@ pub fn spawn_initial_ship(mut commands: Commands) {
         ThermalDelta(0.0),
         PowerState::Active,
         Neighbors(vec![hallway_id]),
+        Transform::from_xyz(-300.0, 50.0, 0.0),
+        RoomLayout {
+            width: 120.0,
+            height: 120.0,
+        },
     ));
 
     commands.entity(hallway_id).insert((
@@ -35,6 +43,11 @@ pub fn spawn_initial_ship(mut commands: Commands) {
         ThermalDelta(0.0),
         PowerState::Active,
         Neighbors(vec![reactor_id, bridge_id]),
+        Transform::from_xyz(0.0, 50.0, 0.0),
+        RoomLayout {
+            width: 300.0,
+            height: 60.0,
+        },
     ));
 
     commands.entity(bridge_id).insert((
@@ -49,6 +62,11 @@ pub fn spawn_initial_ship(mut commands: Commands) {
         ThermalDelta(0.0),
         PowerState::Active,
         Neighbors(vec![hallway_id]),
+        Transform::from_xyz(300.0, 50.0, 0.0),
+        RoomLayout {
+            width: 150.0,
+            height: 180.0,
+        },
     ));
 
     commands.spawn((

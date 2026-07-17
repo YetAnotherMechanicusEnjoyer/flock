@@ -32,6 +32,7 @@ impl Plugin for TerminalPlugin {
                     systems::update_terminal_history,
                     update_measures,
                     systems::update_measures,
+                    systems::terminal_scroll,
                 )
                     .run_if(in_state(AppState::ActiveSimulation)),
             );
@@ -58,7 +59,7 @@ fn update_measures(
 fn process_commands(
     mut command_queue: ResMut<CommandQueue>,
     mut printer: MessageWriter<PrintToTerminal>,
-    room_query: Query<(&Room, &Temperature, &PowerState)>,
+    room_query: Query<(Entity, &Room, &Temperature, &PowerState)>,
     mut door_query: Query<&mut Door>,
 ) {
     if command_queue.pending.is_empty() {
@@ -74,11 +75,14 @@ fn process_commands(
             parser::ParsedCommand::Status => {
                 printer.write(PrintToTerminal("--- SHIP STATUS ---".to_string()));
 
-                for (room, temp, power) in &room_query {
+                for (entity, room, temp, power) in &room_query {
                     let temp_c = kelvin_to_celsius(temp.current);
 
-                    let status_line =
-                        format!("[{}] Temp: {:.1}°C | Power: {:?}", room.name, temp_c, power);
+                    let status_line = format!(
+                        "{entity:?} [{}] Temp: {:.1}°C | Power: {:?}",
+                        room.name, temp_c, power
+                    );
+                    info!(status_line);
                     printer.write(PrintToTerminal(status_line));
                 }
             }

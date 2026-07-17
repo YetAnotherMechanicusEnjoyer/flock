@@ -5,99 +5,65 @@ use bevy::{
     input::{
         ButtonState,
         keyboard::{Key, KeyboardInput},
+        mouse::MouseWheel,
     },
     prelude::*,
+    sprite::Anchor,
 };
 
-pub const MAX_TERM_HISTORY: usize = 50;
+const VISIBLE_LINES: usize = 15;
+const MAX_HISTORY: usize = 1000;
 
 pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2d);
+    let font = asset_server.load("fonts/default.ttf");
 
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: Val::Px(0.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Start,
-                justify_content: JustifyContent::Start,
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.05, 0.05, 0.05, 0.9)),
-        ))
-        .with_child((
-            Measures,
-            Text::new("Room Measures:\n"),
-            TextFont {
-                font: asset_server.load("fonts/default.ttf").into(),
-                font_size: 16.0.into(),
-                ..default()
-            },
-            TextColor(Color::srgb(0.7, 0.7, 0.7)),
-        ));
+    commands.spawn((
+        Text2d::new("Flock Monitoring System v0.1.0\nRoom Measures:\n"),
+        TextFont {
+            font: font.clone().into(),
+            font_size: 16.0.into(),
+            ..default()
+        },
+        TextLayout::justify(Justify::Start),
+        Anchor::TOP_LEFT,
+        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+        Transform::from_xyz(-620.0, 340.0, 100.0),
+    ));
 
-    commands
-        .spawn((
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(30.0),
-                position_type: PositionType::Absolute,
-                bottom: Val::Px(0.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Start,
-                justify_content: JustifyContent::Start,
-                padding: UiRect::all(Val::Px(10.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.05, 0.05, 0.05, 1.0)),
-        ))
-        .with_children(|parent| {
-            parent
-                .spawn(Node {
-                    flex_grow: 1.0,
-                    overflow: Overflow::clip_y(),
-                    flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::FlexEnd,
-                    margin: UiRect::bottom(Val::Px(10.0)),
-                    min_height: Val::Px(0.0),
-                    ..default()
-                })
-                .with_children(|history_container| {
-                    history_container.spawn((
-                        TerminalHistory,
-                        Text::new("FLOCK TERM v0.1.0\nType 'help' for commands.\n"),
-                        TextFont {
-                            font: asset_server.load("fonts/default.ttf").into(),
-                            font_size: 16.0.into(),
-                            ..default()
-                        },
-                        TextColor(Color::srgb(0.7, 0.7, 0.7)),
-                    ));
-                });
-            parent.spawn((
-                TerminalInput {
-                    buffer: String::with_capacity(128),
-                },
-                Text::new("> "),
-                TextFont {
-                    font: asset_server.load("fonts/default.ttf").into(),
-                    font_size: 18.0.into(),
-                    ..default()
-                },
-                TextColor(Color::srgb(0.2, 0.8, 0.2)),
-                Node {
-                    flex_shrink: 0.0,
-                    ..default()
-                },
-            ));
-        });
+    commands.spawn((
+        TerminalHistory::default(),
+        Text2d::new("FLOCK TERM v0.1.0\nType 'help' for commands.\n"),
+        TextFont {
+            font: font.clone().into(),
+            font_size: 16.0.into(),
+            ..default()
+        },
+        TextLayout::justify(Justify::Start),
+        Anchor::TOP_LEFT,
+        TextColor(Color::srgb(0.4, 0.9, 0.4)),
+        Transform::from_xyz(-620.0, -40.0, 100.0),
+    ));
+
+    commands.spawn((
+        TerminalInput {
+            buffer: String::with_capacity(128),
+        },
+        Text2d::new("> "),
+        TextFont {
+            font: font.into(),
+            font_size: 18.0.into(),
+            ..default()
+        },
+        TextLayout::justify(Justify::Start),
+        Anchor::TOP_LEFT,
+        TextColor(Color::srgb(0.2, 0.8, 0.2)),
+        Transform::from_xyz(-620.0, -330.0, 100.0),
+    ));
 }
 
 pub fn update_measures(
     mut messages: MessageReader<PrintToMeasures>,
-    mut measures: Single<&mut Text, With<Measures>>,
+    mut measures: Single<&mut Text2d, With<Measures>>,
 ) {
     if messages.is_empty() {
         return;
@@ -116,27 +82,71 @@ pub fn update_measures(
 
 pub fn update_terminal_history(
     mut messages: MessageReader<PrintToTerminal>,
-    mut history_query: Single<&mut Text, With<TerminalHistory>>,
+    mut terminal: Single<(&mut TerminalHistory, &mut Text2d)>,
 ) {
-    if messages.is_empty() {
-        return;
+    let (history, text) = &mut *terminal;
+
+    let mut changed = false;
+
+    for msg in messages.read() {
+        history.lines.push(msg.0.clone());
+        history.scroll = 0;
+        changed = true;
     }
 
-    for message in messages.read() {
-        history_query.0.push_str(&message.0);
-        history_query.0.push('\n');
+    if history.lines.len() > MAX_HISTORY {
+        let excess = history.lines.len() - MAX_HISTORY;
+        history.lines.drain(..excess);
     }
 
-    let lines: Vec<&str> = history_query.0.lines().collect();
-    if lines.len() > MAX_TERM_HISTORY {
-        let truncated = lines[lines.len() - MAX_TERM_HISTORY..].join("\n");
-        history_query.0 = truncated + "\n";
+    if changed {
+        rebuild_terminal(history, text);
+    }
+}
+
+fn rebuild_terminal(history: &TerminalHistory, text: &mut Text2d) {
+    text.clear();
+
+    let len = history.lines.len();
+
+    let end = len.saturating_sub(history.scroll);
+
+    let start = end.saturating_sub(VISIBLE_LINES);
+
+    for line in &history.lines[start..end] {
+        text.push_str(line);
+        text.push('\n');
+    }
+}
+
+pub fn terminal_scroll(
+    mut wheel: MessageReader<MouseWheel>,
+    mut terminal: Single<(&mut TerminalHistory, &mut Text2d)>,
+) {
+    let (history, text) = &mut *terminal;
+
+    let max_scroll = history.lines.len().saturating_sub(VISIBLE_LINES);
+
+    let mut changed = false;
+
+    for ev in wheel.read() {
+        if ev.y > 0.0 {
+            history.scroll = (history.scroll + 1).min(max_scroll);
+            changed = true;
+        } else if ev.y < 0.0 {
+            history.scroll = history.scroll.saturating_sub(1);
+            changed = true;
+        }
+    }
+
+    if changed {
+        rebuild_terminal(history, text);
     }
 }
 
 pub fn handle_typing(
     mut key_events: MessageReader<KeyboardInput>,
-    mut terminal: Single<(&mut TerminalInput, &mut Text)>,
+    mut terminal: Single<(&mut TerminalInput, &mut Text2d)>,
     mut command_queue: ResMut<CommandQueue>,
 ) {
     let (ref mut term_input, ref mut text) = *terminal;

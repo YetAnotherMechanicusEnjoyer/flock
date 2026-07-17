@@ -1,10 +1,22 @@
 use bevy::prelude::*;
 
 #[derive(Component)]
-pub struct TerminalRoot;
+pub struct TerminalHistory {
+    pub lines: Vec<String>,
+    pub scroll: usize,
+}
 
-#[derive(Component)]
-pub struct TerminalHistory;
+impl Default for TerminalHistory {
+    fn default() -> Self {
+        Self {
+            lines: vec![
+                "FLOCK TERM v0.1.0".into(),
+                "Type 'help' for commands.".into(),
+            ],
+            scroll: 0,
+        }
+    }
+}
 
 #[derive(Component, Default)]
 pub struct TerminalInput {

@@ -3,7 +3,8 @@ use crate::{
     terminal::components::PrintToTerminal,
     utils::consts::{
         DEFAULT_CRITICAL_TEMP, HEAT_DELTA_ACTIVE, HEAT_DELTA_OFFLINE, HEAT_DELTA_OVERCHARGE,
-        MAX_TEMP, REACTOR_CRITICAL_TEMP, ZERO_CELSIUS,
+        MAX_TEMP, OXYGEN_MAX, OXYGEN_REPLENISH_RATE, OXYGEN_VACUUM_LEAK, REACTOR_CRITICAL_TEMP,
+        ZERO_CELSIUS,
     },
 };
 
@@ -42,6 +43,8 @@ pub fn spawn_initial_ship(mut commands: Commands) {
             VulnerabilityType::PowerShortage,
             VulnerabilityType::HullBreach,
         ]),
+        Oxygen(OXYGEN_MAX),
+        OxygenDelta(0.0),
     ));
 
     commands.entity(hallway_id).insert((
@@ -67,6 +70,8 @@ pub fn spawn_initial_ship(mut commands: Commands) {
             timer: Timer::from_seconds(3.0, TimerMode::Repeating),
         },
         Vulnerabilities(vec![VulnerabilityType::DoorMalfunction]),
+        Oxygen(OXYGEN_MAX),
+        OxygenDelta(0.0),
     ));
 
     commands.entity(bridge_id).insert((
@@ -96,6 +101,11 @@ pub fn spawn_initial_ship(mut commands: Commands) {
             VulnerabilityType::DoorMalfunction,
             VulnerabilityType::HullBreach,
         ]),
+        Oxygen(OXYGEN_MAX),
+        OxygenDelta(0.0),
+        LifeSupport {
+            output_rate: OXYGEN_REPLENISH_RATE,
+        },
     ));
 
     commands.spawn((
@@ -134,7 +144,7 @@ pub fn process_thermodynamics(
             PowerState::Overcharged => HEAT_DELTA_OVERCHARGE,
         };
 
-        if hull.0 < 100.0 {
+        if hull.0 < 10.0 {
             let leak_factor = (100.0 - hull.0) / 100.0;
             heat_delta -= leak_factor * 50.0;
         }
@@ -161,6 +171,40 @@ pub fn process_repairs(
                 "DRONES: Hull integrity fully restored in {}.",
                 room.name
             )));
+        }
+    }
+}
+
+pub fn process_life_support(
+    time: Res<Time<Fixed>>,
+    ls_query: Query<(&LifeSupport, &PowerState)>,
+    mut room_query: Query<(&mut Oxygen, &HullIntegrity)>,
+) {
+    let dt = time.delta_secs();
+
+    let mut global_replenishment = 0.0;
+    for (ls, power) in ls_query.iter() {
+        match power {
+            PowerState::Active => global_replenishment += ls.output_rate,
+            PowerState::Overcharged => global_replenishment += ls.output_rate * 2.5,
+            PowerState::Offline => {}
+        }
+    }
+
+    for (mut o2, hull) in room_query.iter_mut() {
+        let mut delta = 0.0;
+
+        if o2.0 < OXYGEN_MAX {
+            delta += global_replenishment;
+        }
+
+        if hull.0 < 100.0 {
+            let leak_factor = (100.0 - hull.0) / 100.0;
+            delta -= leak_factor * OXYGEN_VACUUM_LEAK;
+        }
+
+        if delta != 0.0 {
+            o2.0 = (o2.0 + delta * dt).clamp(0.0, OXYGEN_MAX);
         }
     }
 }

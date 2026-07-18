@@ -4,7 +4,9 @@ pub mod systems;
 
 use crate::{
     core::state::AppState,
-    simulation::components::{Door, HullIntegrity, PowerState, RepairTask, Room, Temperature},
+    simulation::components::{
+        Door, HullIntegrity, Oxygen, PowerState, RepairTask, Room, Temperature,
+    },
     terminal::components::PrintToTerminal,
     utils::convert::kelvin_to_celsius,
 };
@@ -20,6 +22,7 @@ pub type RoomQuery<'a> = (
     &'a mut PowerState,
     &'a mut HullIntegrity,
     Option<&'a RepairTask>,
+    &'a Oxygen,
 );
 
 pub struct TerminalPlugin;
@@ -83,12 +86,12 @@ fn process_commands(
 
 fn handle_status(printer: &mut MessageWriter<PrintToTerminal>, room_query: &Query<RoomQuery>) {
     printer.write(PrintToTerminal("--- SHIP STATUS ---".to_string()));
-    for (entity, room, temp, power, hull, task) in room_query {
+    for (entity, room, temp, power, hull, task, oxygen) in room_query {
         let temp_c = kelvin_to_celsius(temp.current);
         let repair_status = if task.is_some() { "[REPAIRING]" } else { "" };
         let status_line = format!(
-            "{entity:?} | Room: {} | Temp: {:.1}°C | Power: {:?} | Hull: {}% {}",
-            room.name, temp_c, power, hull.0, repair_status
+            "{entity:?} | Room: {} | Temp: {:.1}°C | O2: {:.1}% | Power: {:?} | Hull: {}% {}",
+            room.name, temp_c, oxygen.0, power, hull.0, repair_status,
         );
         printer.write(PrintToTerminal(status_line));
     }
@@ -139,7 +142,7 @@ fn handle_power(
         }
     };
 
-    for (_, room, _, mut power, _, _) in room_query.iter_mut() {
+    for (_, room, _, mut power, _, _, _) in room_query.iter_mut() {
         if room
             .name
             .to_lowercase()
@@ -164,7 +167,7 @@ fn handle_repair(
     room_query: &mut Query<RoomQuery>,
     target_room: &str,
 ) {
-    for (entity, room, _, _, hull, repair_task) in room_query.iter_mut() {
+    for (entity, room, _, _, hull, repair_task, _) in room_query.iter_mut() {
         if room
             .name
             .to_lowercase()

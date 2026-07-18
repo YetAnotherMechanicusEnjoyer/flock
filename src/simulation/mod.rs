@@ -21,8 +21,11 @@ impl Plugin for SimulationPlugin {
             FixedUpdate,
             (
                 systems::process_thermodynamics,
+                systems::process_life_support,
                 propagation::calculate_heat_transfer,
                 propagation::apply_thermal_deltas,
+                propagation::calculate_oxygen_transfer,
+                propagation::apply_oxygen_deltas,
                 events::detect_critical_temperatures,
                 events::resolve_critical_events,
                 systems::process_repairs,

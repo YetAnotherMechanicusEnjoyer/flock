@@ -12,3 +12,8 @@ pub const REACTOR_CRITICAL_TEMP: f32 = ZERO_CELSIUS + 1500.0;
 pub const HEAT_DELTA_OFFLINE: f32 = -1.5;
 pub const HEAT_DELTA_ACTIVE: f32 = 0.5;
 pub const HEAT_DELTA_OVERCHARGE: f32 = 15.0;
+
+pub const OXYGEN_MAX: f32 = 100.0;
+pub const OXYGEN_TRANSFER_RATE: f32 = 1.5;
+pub const OXYGEN_VACUUM_LEAK: f32 = 25.0;
+pub const OXYGEN_REPLENISH_RATE: f32 = 5.0;

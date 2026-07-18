@@ -57,3 +57,14 @@ pub struct Vulnerabilities(pub Vec<VulnerabilityType>);
 
 #[derive(Component, Debug)]
 pub struct RepairTask(pub Timer);
+
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Oxygen(pub f32);
+
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct OxygenDelta(pub f32);
+
+#[derive(Component, Debug, Clone, Copy)]
+pub struct LifeSupport {
+    pub output_rate: f32,
+}

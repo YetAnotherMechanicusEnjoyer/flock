@@ -1,5 +1,6 @@
 use crate::{
     map::components::RoomLayout,
+    terminal::components::PrintToTerminal,
     utils::consts::{
         DEFAULT_CRITICAL_TEMP, HEAT_DELTA_ACTIVE, HEAT_DELTA_OFFLINE, HEAT_DELTA_OVERCHARGE,
         MAX_TEMP, REACTOR_CRITICAL_TEMP, ZERO_CELSIUS,
@@ -122,19 +123,44 @@ pub fn spawn_initial_ship(mut commands: Commands) {
 
 pub fn process_thermodynamics(
     time: Res<Time<Fixed>>,
-    mut query: Query<(&mut Temperature, &PowerState)>,
+    mut query: Query<(&mut Temperature, &PowerState, &HullIntegrity)>,
 ) {
     let delta = time.delta_secs();
 
-    for (mut temp, power) in query.iter_mut() {
-        let heat_delta = match power {
+    for (mut temp, power, hull) in query.iter_mut() {
+        let mut heat_delta = match power {
             PowerState::Offline => HEAT_DELTA_OFFLINE,
             PowerState::Active => HEAT_DELTA_ACTIVE,
             PowerState::Overcharged => HEAT_DELTA_OVERCHARGE,
         };
 
+        if hull.0 < 100.0 {
+            let leak_factor = (100.0 - hull.0) / 100.0;
+            heat_delta -= leak_factor * 50.0;
+        }
+
         if heat_delta != 0.0 {
             temp.current = (temp.current + (heat_delta * delta)).clamp(0.0, MAX_TEMP);
+        }
+    }
+}
+
+pub fn process_repairs(
+    mut commands: Commands,
+    time: Res<Time<Fixed>>,
+    mut query: Query<(Entity, &Room, &mut HullIntegrity, &mut RepairTask)>,
+    mut printer: MessageWriter<PrintToTerminal>,
+) {
+    for (entity, room, mut hull, mut task) in query.iter_mut() {
+        task.0.tick(time.delta());
+
+        if task.0.just_finished() {
+            hull.0 = 100.0;
+            commands.entity(entity).remove::<RepairTask>();
+            printer.write(PrintToTerminal(format!(
+                "DRONES: Hull integrity fully restored in {}.",
+                room.name
+            )));
         }
     }
 }

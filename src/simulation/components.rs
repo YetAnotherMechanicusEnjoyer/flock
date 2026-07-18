@@ -54,3 +54,6 @@ pub enum VulnerabilityType {
 
 #[derive(Component, Debug, Clone)]
 pub struct Vulnerabilities(pub Vec<VulnerabilityType>);
+
+#[derive(Component, Debug)]
+pub struct RepairTask(pub Timer);

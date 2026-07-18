@@ -25,6 +25,7 @@ impl Plugin for SimulationPlugin {
                 propagation::apply_thermal_deltas,
                 events::detect_critical_temperatures,
                 events::resolve_critical_events,
+                systems::process_repairs,
             )
                 .chain()
                 .run_if(in_state(AppState::ActiveSimulation)),

@@ -1,4 +1,4 @@
-use crate::terminal::components::{Measures, PrintToMeasures, PrintToTerminal, TerminalHistory};
+use crate::terminal::components::{PrintToTerminal, TerminalHistory};
 
 use super::components::{CommandQueue, TerminalInput};
 use bevy::{
@@ -59,25 +59,6 @@ pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>)
         TextColor(Color::srgb(0.2, 0.8, 0.2)),
         Transform::from_xyz(-620.0, -330.0, 100.0),
     ));
-}
-
-pub fn update_measures(
-    mut messages: MessageReader<PrintToMeasures>,
-    mut measures: Single<&mut Text2d, With<Measures>>,
-) {
-    if messages.is_empty() {
-        return;
-    }
-
-    measures.clear();
-
-    for message in messages.read() {
-        measures.0.push_str(&message.0);
-        measures.0.push('\n');
-    }
-
-    let len = measures.0.len();
-    measures.0.truncate(len.saturating_sub(1));
 }
 
 pub fn update_terminal_history(

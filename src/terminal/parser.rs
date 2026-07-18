@@ -6,6 +6,7 @@ pub enum ParsedCommand {
     Help,
     ToggleDoor(String),
     SetPower(String, String),
+    Repair(String),
     Unknown(String),
     Empty,
 }
@@ -28,6 +29,7 @@ pub fn parse_command(input: &str) -> ParsedCommand {
             parts.next().unwrap_or_default().to_string(),
             parts.next().unwrap_or_default().to_string(),
         ),
+        "repair" => ParsedCommand::Repair(parts.next().unwrap_or_default().to_string()),
         _ => ParsedCommand::Unknown(cmd.to_string()),
     }
 }

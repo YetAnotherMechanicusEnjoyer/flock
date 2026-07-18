@@ -30,9 +30,3 @@ pub struct CommandQueue {
 
 #[derive(Message)]
 pub struct PrintToTerminal(pub String);
-
-#[derive(Component)]
-pub struct Measures;
-
-#[derive(Message)]
-pub struct PrintToMeasures(pub String);

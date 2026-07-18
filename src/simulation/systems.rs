@@ -1,6 +1,9 @@
 use crate::{
     map::components::RoomLayout,
-    utils::consts::{MAX_TEMP, ZERO_CELSIUS},
+    utils::consts::{
+        DEFAULT_CRITICAL_TEMP, HEAT_DELTA_ACTIVE, HEAT_DELTA_OFFLINE, HEAT_DELTA_OVERCHARGE,
+        MAX_TEMP, REACTOR_CRITICAL_TEMP, ZERO_CELSIUS,
+    },
 };
 
 use super::components::*;
@@ -29,6 +32,15 @@ pub fn spawn_initial_ship(mut commands: Commands) {
             width: 120.0,
             height: 120.0,
         },
+        HullIntegrity(100.0),
+        ThermalThreshold {
+            critical: REACTOR_CRITICAL_TEMP,
+            timer: Timer::from_seconds(5.0, TimerMode::Repeating),
+        },
+        Vulnerabilities(vec![
+            VulnerabilityType::PowerShortage,
+            VulnerabilityType::HullBreach,
+        ]),
     ));
 
     commands.entity(hallway_id).insert((
@@ -48,6 +60,12 @@ pub fn spawn_initial_ship(mut commands: Commands) {
             width: 300.0,
             height: 60.0,
         },
+        HullIntegrity(100.0),
+        ThermalThreshold {
+            critical: DEFAULT_CRITICAL_TEMP,
+            timer: Timer::from_seconds(3.0, TimerMode::Repeating),
+        },
+        Vulnerabilities(vec![VulnerabilityType::DoorMalfunction]),
     ));
 
     commands.entity(bridge_id).insert((
@@ -67,6 +85,16 @@ pub fn spawn_initial_ship(mut commands: Commands) {
             width: 150.0,
             height: 180.0,
         },
+        HullIntegrity(100.0),
+        ThermalThreshold {
+            critical: DEFAULT_CRITICAL_TEMP,
+            timer: Timer::from_seconds(4.0, TimerMode::Repeating),
+        },
+        Vulnerabilities(vec![
+            VulnerabilityType::PowerShortage,
+            VulnerabilityType::DoorMalfunction,
+            VulnerabilityType::HullBreach,
+        ]),
     ));
 
     commands.spawn((
@@ -100,9 +128,9 @@ pub fn process_thermodynamics(
 
     for (mut temp, power) in query.iter_mut() {
         let heat_delta = match power {
-            PowerState::Offline => -1.5,
-            PowerState::Active => 0.5,
-            PowerState::Overcharged => 15.0,
+            PowerState::Offline => HEAT_DELTA_OFFLINE,
+            PowerState::Active => HEAT_DELTA_ACTIVE,
+            PowerState::Overcharged => HEAT_DELTA_OVERCHARGE,
         };
 
         if heat_delta != 0.0 {

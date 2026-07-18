@@ -38,3 +38,19 @@ pub struct Door {
     pub room_a: Entity,
     pub room_b: Entity,
 }
+
+#[derive(Component, Debug)]
+pub struct ThermalThreshold {
+    pub critical: f32,
+    pub timer: Timer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VulnerabilityType {
+    PowerShortage,
+    DoorMalfunction,
+    HullBreach,
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct Vulnerabilities(pub Vec<VulnerabilityType>);

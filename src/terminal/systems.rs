@@ -26,7 +26,7 @@ pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>)
         },
         TextLayout::justify(Justify::Start),
         Anchor::TOP_LEFT,
-        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+        TextColor(Color::srgb(0.9, 0.5, 0.1)),
         Transform::from_xyz(-620.0, 340.0, 100.0),
     ));
 

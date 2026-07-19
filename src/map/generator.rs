@@ -1,9 +1,10 @@
 use bevy::prelude::*;
 use rand::{RngExt, rngs::ThreadRng, seq::SliceRandom};
 
+use super::components::*;
 use crate::{simulation::components::*, utils::consts::*};
 
-pub fn spawn_procedural_ship(mut commands: Commands) {
+pub fn spawn_procedural_ship(mut commands: Commands, config: Res<MapGenConfig>) {
     let mut rng = rand::rng();
 
     let initial_rect =
@@ -28,12 +29,30 @@ pub fn spawn_procedural_ship(mut commands: Commands) {
                 Room {
                     name: room_id.clone(),
                 },
-                Transform::from_translation(center.extend(0.0)),
+                Transform::from_xyz(center.x, center.y, ROOM_Z),
                 RoomLayout { width, height },
                 Oxygen(OXYGEN_MAX),
                 OxygenDelta(0.0),
                 HullIntegrity(100.0),
+                RoomVisual,
+                Sprite {
+                    color: config.room_color.with_alpha(0.15),
+                    custom_size: Some(Vec2::new(width - 2.0, height - 2.0)),
+                    ..default()
+                },
             ))
+            .with_children(|parent| {
+                parent.spawn((
+                    RoomLabel,
+                    Text2d::new(room_id.clone()),
+                    TextFont {
+                        font_size: 12.0.into(),
+                        ..default()
+                    },
+                    TextColor(config.room_color),
+                    Transform::from_xyz(0.0, height / 2.0 - 10.0, LABEL_Z - ROOM_Z),
+                ));
+            })
             .id();
 
         room_entities.push((room_ent, *rect));
@@ -41,7 +60,6 @@ pub fn spawn_procedural_ship(mut commands: Commands) {
     }
 
     distribute_machines(&mut commands, &mut available_rooms, &mut rng);
-
     spawn_doors_on_edges(&mut commands, &room_entities);
 }
 
@@ -67,12 +85,21 @@ fn distribute_machines(
             let m_id = format!("{}-{}", room_id, m_type.short_code());
             let center = rect.center();
 
+            let size = Vec2::splat(crate::utils::consts::MACHINE_RENDER_SIZE);
+            let custom_size = match m_type {
+                MachineType::Server => Vec2::new(size.x / 2.0, size.y),
+                MachineType::Reactor => size * 1.2,
+                _ => size,
+            };
+
+            let color = Color::srgb(0.2, 0.8, 0.2);
+
             let mut machine_cmd = commands.spawn((
                 Machine {
                     id_name: m_id,
                     machine_type: m_type,
                 },
-                Transform::from_xyz(center.x, center.y, 1.0),
+                Transform::from_xyz(center.x, center.y, MACHINE_Z),
                 LocatedIn(room_ent),
                 Temperature {
                     current: DEFAULT_TEMP,
@@ -80,7 +107,26 @@ fn distribute_machines(
                 },
                 ThermalDelta(0.0),
                 PowerState::Active,
+                MachineVisual,
+                Sprite {
+                    color,
+                    custom_size: Some(custom_size),
+                    ..default()
+                },
             ));
+
+            machine_cmd.with_children(|parent| {
+                parent.spawn((
+                    MachineLabel,
+                    Text2d::new(m_type.short_code()),
+                    TextFont {
+                        font_size: 9.0.into(),
+                        ..default()
+                    },
+                    TextColor(color),
+                    Transform::from_xyz(0.0, custom_size.y / 1.4, LABEL_Z - MACHINE_Z),
+                ));
+            });
 
             match m_type {
                 MachineType::Reactor => {
@@ -169,84 +215,6 @@ fn split_rect(rect: Rect, depth: u32, rng: &mut ThreadRng, rects: &mut Vec<Rect>
     }
 }
 
-fn spawn_machines_in_room(
-    commands: &mut Commands,
-    room_ent: Entity,
-    room_id: &str,
-    center: Vec2,
-    width: f32,
-    height: f32,
-    rng: &mut ThreadRng,
-) {
-    let machine_count = rng.random_range(1..=3);
-
-    let possible_types = [
-        MachineType::Reactor,
-        MachineType::LifeSupport,
-        MachineType::Server,
-        MachineType::Cooler,
-    ];
-
-    for _ in 0..machine_count {
-        let m_type = possible_types[rng.random_range(0..possible_types.len())];
-        let m_id = format!("{}-{}", room_id, m_type.short_code());
-
-        let offset_x = rng.random_range((-width / 3.0)..(width / 3.0));
-        let offset_y = rng.random_range((-height / 3.0)..(height / 3.0));
-
-        let mut machine_cmd = commands.spawn((
-            Machine {
-                id_name: m_id.clone(),
-                machine_type: m_type,
-            },
-            Transform::from_xyz(center.x + offset_x, center.y + offset_y, 1.0),
-            LocatedIn(room_ent),
-            Temperature {
-                current: DEFAULT_TEMP,
-                target: DEFAULT_TEMP,
-            },
-            ThermalDelta(0.0),
-            PowerState::Active,
-        ));
-
-        match m_type {
-            MachineType::Reactor => {
-                machine_cmd.insert((
-                    ThermalThreshold {
-                        critical: REACTOR_CRITICAL_TEMP,
-                        timer: Timer::from_seconds(5.0, TimerMode::Repeating),
-                    },
-                    Vulnerabilities(vec![VulnerabilityType::HullBreach]),
-                ));
-            }
-            MachineType::LifeSupport => {
-                machine_cmd.insert((
-                    LifeSupport {
-                        output_rate: OXYGEN_REPLENISH_RATE,
-                    },
-                    ThermalThreshold {
-                        critical: DEFAULT_CRITICAL_TEMP,
-                        timer: Timer::from_seconds(3.0, TimerMode::Repeating),
-                    },
-                    Vulnerabilities(vec![VulnerabilityType::PowerShortage]),
-                ));
-            }
-            _ => {
-                machine_cmd.insert((
-                    ThermalThreshold {
-                        critical: DEFAULT_CRITICAL_TEMP,
-                        timer: Timer::from_seconds(4.0, TimerMode::Repeating),
-                    },
-                    Vulnerabilities(vec![
-                        VulnerabilityType::PowerShortage,
-                        VulnerabilityType::DoorMalfunction,
-                    ]),
-                ));
-            }
-        }
-    }
-}
-
 fn spawn_doors_on_edges(commands: &mut Commands, rooms: &[(Entity, Rect)]) {
     let mut door_count = 1;
 
@@ -284,15 +252,37 @@ fn spawn_doors_on_edges(commands: &mut Commands, rooms: &[(Entity, Rect)]) {
             }
 
             if let Some(pos) = door_pos {
-                commands.spawn((
-                    Door {
-                        id_name: format!("D{:02}", door_count),
-                        is_open: true,
-                        room_a: *ent_a,
-                        room_b: *ent_b,
-                    },
-                    Transform::from_translation(pos.extend(2.0)),
-                ));
+                let door_name = format!("D{:02}", door_count);
+                let color = Color::srgb(0.2, 0.9, 0.2);
+
+                commands
+                    .spawn((
+                        Door {
+                            id_name: door_name.clone(),
+                            is_open: true,
+                            room_a: *ent_a,
+                            room_b: *ent_b,
+                        },
+                        Transform::from_xyz(pos.x, pos.y, DOOR_Z),
+                        DoorVisual,
+                        Sprite {
+                            color,
+                            custom_size: Some(Vec2::new(12.0, 12.0)),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            DoorLabel,
+                            Text2d::new(door_name),
+                            TextFont {
+                                font_size: 10.0.into(),
+                                ..default()
+                            },
+                            TextColor(color),
+                            Transform::from_xyz(0.0, 11., LABEL_Z - DOOR_Z),
+                        ));
+                    });
                 door_count += 1;
             }
         }

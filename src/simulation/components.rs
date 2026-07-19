@@ -2,8 +2,13 @@ use bevy::prelude::*;
 
 #[derive(Component, Debug, Clone)]
 pub struct Room {
-    pub name: &'static str,
-    pub volume: f32,
+    pub name: String,
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct RoomLayout {
+    pub width: f32,
+    pub height: f32,
 }
 
 #[derive(Component, Debug, Clone)]
@@ -68,3 +73,31 @@ pub struct OxygenDelta(pub f32);
 pub struct LifeSupport {
     pub output_rate: f32,
 }
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MachineType {
+    Reactor,
+    LifeSupport,
+    Server,
+    Cooler,
+}
+
+impl MachineType {
+    pub fn short_code(&self) -> &'static str {
+        match self {
+            MachineType::Reactor => "RCT",
+            MachineType::LifeSupport => "LFS",
+            MachineType::Server => "SRV",
+            MachineType::Cooler => "COL",
+        }
+    }
+}
+
+#[derive(Component, Debug, Clone)]
+pub struct Machine {
+    pub id_name: String,
+    pub machine_type: MachineType,
+}
+
+#[derive(Component, Debug, Clone, Copy)]
+pub struct LocatedIn(pub Entity);

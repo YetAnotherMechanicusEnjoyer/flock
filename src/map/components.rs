@@ -14,9 +14,3 @@ impl Default for MapGenConfig {
         }
     }
 }
-
-#[derive(Component, Debug, Clone)]
-pub struct RoomLayout {
-    pub width: f32,
-    pub height: f32,
-}

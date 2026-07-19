@@ -5,7 +5,7 @@ pub mod systems;
 use crate::{
     core::state::AppState,
     simulation::components::{
-        Door, HullIntegrity, Oxygen, PowerState, RepairTask, Room, Temperature,
+        Door, HullIntegrity, LocatedIn, Machine, Oxygen, PowerState, RepairTask, Room, Temperature,
     },
     terminal::components::PrintToTerminal,
     utils::convert::kelvin_to_celsius,
@@ -18,11 +18,15 @@ use parser::parse_command;
 pub type RoomQuery<'a> = (
     Entity,
     &'a Room,
+    &'a HullIntegrity,
+    &'a Oxygen,
+    Option<&'a RepairTask>,
+);
+pub type MachineQuery<'a> = (
+    &'a Machine,
     &'a Temperature,
     &'a mut PowerState,
-    &'a mut HullIntegrity,
-    Option<&'a RepairTask>,
-    &'a Oxygen,
+    &'a LocatedIn,
 );
 
 pub struct TerminalPlugin;
@@ -42,7 +46,9 @@ impl Plugin for TerminalPlugin {
                     systems::handle_typing,
                     systems::update_terminal_history,
                     systems::terminal_scroll,
+                    systems::handle_window_drag,
                 )
+                    .chain()
                     .run_if(in_state(AppState::ActiveSimulation)),
             );
     }
@@ -52,7 +58,8 @@ fn process_commands(
     mut commands: Commands,
     mut command_queue: ResMut<CommandQueue>,
     mut printer: MessageWriter<PrintToTerminal>,
-    mut room_query: Query<RoomQuery>,
+    room_query: Query<RoomQuery>,
+    mut machine_query: Query<MachineQuery>,
     mut door_query: Query<&mut Door>,
 ) {
     if command_queue.pending.is_empty() {
@@ -65,16 +72,20 @@ fn process_commands(
         printer.write(PrintToTerminal(format!("> {}", cmd_str)));
 
         match parsed {
-            parser::ParsedCommand::Status => handle_status(&mut printer, &room_query),
-            parser::ParsedCommand::Help => handle_help(&mut printer),
+            parser::ParsedCommand::Status => {
+                handle_status(&mut printer, &room_query, &machine_query);
+            }
+            parser::ParsedCommand::Help => {
+                handle_help(&mut printer);
+            }
             parser::ParsedCommand::ToggleDoor(door_id) => {
-                handle_door(&mut printer, &mut door_query, &door_id)
+                handle_door(&mut printer, &mut door_query, &door_id);
             }
             parser::ParsedCommand::SetPower(target, state) => {
-                handle_power(&mut printer, &mut room_query, &target, &state);
+                handle_power(&mut printer, &mut machine_query, &target, &state);
             }
             parser::ParsedCommand::Repair(target) => {
-                handle_repair(&mut commands, &mut printer, &mut room_query, &target);
+                handle_repair(&mut commands, &mut printer, &room_query, &target);
             }
             parser::ParsedCommand::Unknown(cmd) => {
                 printer.write(PrintToTerminal(format!("COMMAND NOT FOUND: {}", cmd)));
@@ -84,16 +95,28 @@ fn process_commands(
     }
 }
 
-fn handle_status(printer: &mut MessageWriter<PrintToTerminal>, room_query: &Query<RoomQuery>) {
-    printer.write(PrintToTerminal("--- SHIP STATUS ---".to_string()));
-    for (entity, room, temp, power, hull, task, oxygen) in room_query {
-        let temp_c = kelvin_to_celsius(temp.current);
-        let repair_status = if task.is_some() { "[REPAIRING]" } else { "" };
-        let status_line = format!(
-            "{entity:?} | Room: {} | Temp: {:.1}°C | O2: {:.1}% | Power: {:?} | Hull: {}% {}",
-            room.name, temp_c, oxygen.0, power, hull.0, repair_status,
-        );
-        printer.write(PrintToTerminal(status_line));
+fn handle_status(
+    printer: &mut MessageWriter<PrintToTerminal>,
+    room_query: &Query<RoomQuery>,
+    machine_query: &Query<MachineQuery>,
+) {
+    printer.write(PrintToTerminal("--- SHIP NETWORK STATUS ---".to_string()));
+
+    for (room_ent, room, hull, o2, _) in room_query.iter() {
+        printer.write(PrintToTerminal(format!(
+            "[{}] O2: {:.1}% | Hull: {}%",
+            room.name, o2.0, hull.0
+        )));
+
+        for (machine, temp, power, location) in machine_query {
+            if location.0 == room_ent {
+                let temp_c = kelvin_to_celsius(temp.current);
+                printer.write(PrintToTerminal(format!(
+                    "  └─ {} ({:?}) - Temp: {:.1}°C | Pwr: {:?}",
+                    machine.id_name, machine.machine_type, temp_c, power
+                )));
+            }
+        }
     }
 }
 
@@ -126,8 +149,8 @@ fn handle_door(
 
 fn handle_power(
     printer: &mut MessageWriter<PrintToTerminal>,
-    room_query: &mut Query<RoomQuery>,
-    target_room: &str,
+    machine_query: &mut Query<MachineQuery>,
+    target_machine: &str,
     state_str: &str,
 ) {
     let new_state = match state_str.to_lowercase().as_str() {
@@ -142,32 +165,28 @@ fn handle_power(
         }
     };
 
-    for (_, room, _, mut power, _, _, _) in room_query.iter_mut() {
-        if room
-            .name
-            .to_lowercase()
-            .contains(&target_room.to_lowercase())
-        {
+    for (machine, _, mut power, _) in machine_query.iter_mut() {
+        if machine.id_name.eq_ignore_ascii_case(target_machine) {
             *power = new_state;
             printer.write(PrintToTerminal(format!(
-                "POWER ROUTING: {} is now {:?}",
-                room.name, new_state
+                "ROUTING: {} is now {:?}",
+                machine.id_name, new_state
             )));
             return;
         }
     }
     printer.write(PrintToTerminal(format!(
-        "ERROR: ROOM MATCHING '{target_room}' NOT FOUND."
+        "ERROR: MACHINE MATCHING '{target_machine}' NOT FOUND."
     )));
 }
 
 fn handle_repair(
     commands: &mut Commands,
     printer: &mut MessageWriter<PrintToTerminal>,
-    room_query: &mut Query<RoomQuery>,
+    room_query: &Query<RoomQuery>,
     target_room: &str,
 ) {
-    for (entity, room, _, _, hull, repair_task, _) in room_query.iter_mut() {
+    for (entity, room, hull, _, repair_task) in room_query.iter() {
         if room
             .name
             .to_lowercase()

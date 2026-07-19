@@ -17,3 +17,9 @@ pub const OXYGEN_MAX: f32 = 100.0;
 pub const OXYGEN_TRANSFER_RATE: f32 = 1.5;
 pub const OXYGEN_VACUUM_LEAK: f32 = 25.0;
 pub const OXYGEN_REPLENISH_RATE: f32 = 5.0;
+
+pub const SHIP_SIZE_WIDTH: f32 = 800.0;
+pub const SHIP_SIZE_HEIGHT: f32 = 600.0;
+pub const MIN_ROOM_SIZE: f32 = 120.0;
+
+pub const MACHINE_RENDER_SIZE: f32 = 24.0;

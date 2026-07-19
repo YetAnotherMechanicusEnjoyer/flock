@@ -1,6 +1,5 @@
-use crate::terminal::components::{PrintToTerminal, TerminalHistory};
+use super::components::*;
 
-use super::components::{CommandQueue, TerminalInput};
 use bevy::{
     input::{
         ButtonState,
@@ -9,16 +8,20 @@ use bevy::{
     },
     prelude::*,
     sprite::Anchor,
+    window::PrimaryWindow,
 };
 
-const VISIBLE_LINES: usize = 15;
+const VISIBLE_LINES: usize = 17;
 const MAX_HISTORY: usize = 1000;
 
 pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font = asset_server.load("fonts/default.ttf");
 
     commands.spawn((
-        Text2d::new("Flock Monitoring System v0.1.0\nRoom Measures:\n"),
+        Text2d::new(format!(
+            "Flock Monitoring System v{}\nRoom Measures:\n",
+            env!("CARGO_PKG_VERSION")
+        )),
         TextFont {
             font: font.clone().into(),
             font_size: 16.0.into(),
@@ -27,38 +30,166 @@ pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>)
         TextLayout::justify(Justify::Start),
         Anchor::TOP_LEFT,
         TextColor(Color::srgb(0.9, 0.5, 0.1)),
-        Transform::from_xyz(-620.0, 340.0, 100.0),
+        Transform::from_xyz(-620.0, 340.0, 10.0),
     ));
 
-    commands.spawn((
-        TerminalHistory::default(),
-        Text2d::new("FLOCK TERM v0.1.0\nType 'help' for commands.\n"),
-        TextFont {
-            font: font.clone().into(),
-            font_size: 16.0.into(),
-            ..default()
-        },
-        TextLayout::justify(Justify::Start),
-        Anchor::TOP_LEFT,
-        TextColor(Color::srgb(0.4, 0.9, 0.4)),
-        Transform::from_xyz(-620.0, -40.0, 100.0),
-    ));
+    let window_size = Vec2::new(600.0, 420.0);
+    let min_size = Vec2::new(600.0, 40.0);
 
-    commands.spawn((
-        TerminalInput {
-            buffer: String::with_capacity(128),
-        },
-        Text2d::new("> "),
-        TextFont {
-            font: font.into(),
-            font_size: 18.0.into(),
-            ..default()
-        },
-        TextLayout::justify(Justify::Start),
-        Anchor::TOP_LEFT,
-        TextColor(Color::srgb(0.2, 0.8, 0.2)),
-        Transform::from_xyz(-620.0, -330.0, 100.0),
-    ));
+    let parent_window = commands
+        .spawn((
+            TerminalWindow {
+                is_dragging: false,
+                drag_offset: Vec2::ZERO,
+                is_minimized: false,
+                full_size: window_size,
+                min_size,
+            },
+            Sprite {
+                color: Color::srgba(0.05, 0.08, 0.05, 1.0),
+                custom_size: Some(window_size),
+                ..default()
+            },
+            Transform::from_xyz(300.0, 110.0, 100.0),
+            Anchor::TOP_CENTER,
+        ))
+        .id();
+
+    let title_bar = commands
+        .spawn((
+            Text2d::new(format!("[-] FLOCK TERM v{}", env!("CARGO_PKG_VERSION"))),
+            TextFont {
+                font: font.clone().into(),
+                font_size: 14.0.into(),
+                ..default()
+            },
+            TextColor(Color::srgb(0.6, 0.7, 0.2)),
+            Transform::from_xyz(-285.0, -15.0, 1.0),
+            Anchor::TOP_LEFT,
+        ))
+        .id();
+
+    let content_group = commands
+        .spawn((TerminalContent, Transform::default(), Visibility::Inherited))
+        .id();
+
+    let history = commands
+        .spawn((
+            TerminalHistory::default(),
+            Text2d::new("Type 'help' for commands.\n"),
+            TextFont {
+                font: font.clone().into(),
+                font_size: 16.0.into(),
+                ..default()
+            },
+            TextLayout::justify(Justify::Start),
+            Anchor::TOP_LEFT,
+            TextColor(Color::srgb(0.4, 0.9, 0.4)),
+            Transform::from_xyz(-285.0, -50.0, 1.0),
+        ))
+        .id();
+
+    let input = commands
+        .spawn((
+            TerminalInput {
+                buffer: String::with_capacity(128),
+            },
+            Text2d::new("> "),
+            TextFont {
+                font: font.into(),
+                font_size: 18.0.into(),
+                ..default()
+            },
+            TextLayout::justify(Justify::Start),
+            Anchor::TOP_LEFT,
+            TextColor(Color::srgb(0.2, 0.8, 0.2)),
+            Transform::from_xyz(-285.0, -390.0, 1.0),
+        ))
+        .id();
+
+    commands
+        .entity(content_group)
+        .add_children(&[history, input]);
+    commands
+        .entity(parent_window)
+        .add_children(&[title_bar, content_group]);
+}
+
+pub fn handle_window_drag(
+    window: Single<&Window, With<PrimaryWindow>>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    mut terminal_query: Query<(&mut TerminalWindow, &mut Transform, &mut Sprite, &Children)>,
+    mut content_query: Query<&mut Visibility, With<TerminalContent>>,
+    mut text_query: Query<&mut Text2d>,
+) {
+    let Some(cursor_pos) = window.cursor_position() else {
+        return;
+    };
+
+    let world_x = cursor_pos.x - window.width() / 2.0;
+    let world_y = -(cursor_pos.y - window.height() / 2.0);
+    let mouse_pos = Vec2::new(world_x, world_y);
+
+    for (mut term, mut transform, mut sprite, children) in terminal_query.iter_mut() {
+        let pos = transform.translation.truncate();
+        let half_width = term.full_size.x / 2.0;
+
+        let title_bar_rect = Rect::from_center_size(
+            Vec2::new(pos.x, pos.y - 15.0),
+            Vec2::new(term.full_size.x, 30.0),
+        );
+
+        let minimize_rect = Rect::from_center_size(
+            Vec2::new(pos.x - half_width + 25.0, pos.y - 15.0),
+            Vec2::new(50.0, 30.0),
+        );
+
+        if buttons.just_pressed(MouseButton::Left) {
+            if minimize_rect.contains(mouse_pos) {
+                term.is_minimized = !term.is_minimized;
+
+                if term.is_minimized {
+                    sprite.custom_size = Some(term.min_size);
+
+                    for child in children.iter() {
+                        if let Ok(mut vis) = content_query.get_mut(child) {
+                            *vis = Visibility::Hidden;
+                        }
+                        if let Ok(mut text) = text_query.get_mut(child)
+                            && text.0.starts_with("[-]")
+                        {
+                            text.0 = text.0.replace("[-]", "[+]");
+                        }
+                    }
+                } else {
+                    sprite.custom_size = Some(term.full_size);
+
+                    for child in children.iter() {
+                        if let Ok(mut vis) = content_query.get_mut(child) {
+                            *vis = Visibility::Inherited;
+                        }
+                        if let Ok(mut text) = text_query.get_mut(child)
+                            && text.0.starts_with("[+]")
+                        {
+                            text.0 = text.0.replace("[+]", "[-]");
+                        }
+                    }
+                }
+            } else if title_bar_rect.contains(mouse_pos) {
+                term.is_dragging = true;
+                term.drag_offset = pos - mouse_pos;
+            }
+        }
+
+        if buttons.just_released(MouseButton::Left) {
+            term.is_dragging = false;
+        }
+
+        if term.is_dragging {
+            transform.translation.x = mouse_pos.x + term.drag_offset.x;
+            transform.translation.y = mouse_pos.y + term.drag_offset.y;
+        }
+    }
 }
 
 pub fn update_terminal_history(

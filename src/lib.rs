@@ -22,6 +22,7 @@ pub fn run() {
         }))
         .init_state::<AppState>()
         .insert_resource(ClearColor(Color::srgb(0.06, 0.06, 0.06)))
+        .add_systems(Startup, core::cursor::setup_cursor)
         .add_plugins((
             map::MapPlugin,
             render::RenderPlugin,

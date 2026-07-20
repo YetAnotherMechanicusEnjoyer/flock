@@ -45,6 +45,7 @@ impl Plugin for TerminalPlugin {
                     process_commands,
                     systems::handle_typing,
                     systems::update_terminal_history,
+                    systems::update_terminal_display,
                     systems::terminal_scroll,
                     systems::handle_window_drag,
                 )
@@ -122,7 +123,8 @@ fn handle_status(
 
 fn handle_help(printer: &mut MessageWriter<PrintToTerminal>) {
     printer.write(PrintToTerminal(
-        "AVAILABLE COMMANDS:\n* status\n* help\n* door <id>\n* power <room> <off|on|over>\n* repair <room>".to_string(),
+        "--- AVAILABLE COMMANDS ---\n* help\n* status\n* door <id>\n* power <room> <off|on|over>\n* repair <room>"
+            .to_string(),
     ));
 }
 

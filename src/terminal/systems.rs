@@ -46,7 +46,7 @@ pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>)
                 min_size,
             },
             Sprite {
-                color: Color::srgba(0.05, 0.08, 0.05, 1.0),
+                color: Color::srgba(0.05, 0.05, 0.05, 0.8),
                 custom_size: Some(window_size),
                 ..default()
             },
@@ -89,22 +89,78 @@ pub fn setup_terminal_ui(mut commands: Commands, asset_server: Res<AssetServer>)
         ))
         .id();
 
+    let mut cursor_entity = Entity::PLACEHOLDER;
+    let mut left_text_entity = Entity::PLACEHOLDER;
+    let mut cursor_char_entity = Entity::PLACEHOLDER;
+    let mut right_text_entity = Entity::PLACEHOLDER;
+
     let input = commands
         .spawn((
-            TerminalInput {
-                buffer: String::with_capacity(128),
-            },
-            Text2d::new("> "),
-            TextFont {
-                font: font.into(),
-                font_size: 18.0.into(),
-                ..default()
-            },
-            TextLayout::justify(Justify::Start),
-            Anchor::TOP_LEFT,
-            TextColor(Color::srgb(0.2, 0.8, 0.2)),
+            TerminalInput::default(),
             Transform::from_xyz(-285.0, -390.0, 1.0),
+            Visibility::Inherited,
         ))
+        .with_children(|parent| {
+            cursor_entity = parent
+                .spawn((
+                    Sprite {
+                        color: Color::srgba(0.2, 0.9, 0.2, 0.8),
+                        custom_size: Some(Vec2::new(10.8, 22.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 3.0, 0.5),
+                    Anchor::TOP_LEFT,
+                ))
+                .id();
+
+            left_text_entity = parent
+                .spawn((
+                    Text2d::new("> "),
+                    TextFont {
+                        font: font.clone().into(),
+                        font_size: 18.0.into(),
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.2, 0.8, 0.2)),
+                    Anchor::TOP_LEFT,
+                    Transform::from_xyz(0.0, 0.0, 1.0),
+                ))
+                .id();
+
+            cursor_char_entity = parent
+                .spawn((
+                    Text2d::new(""),
+                    TextFont {
+                        font: font.clone().into(),
+                        font_size: 18.0.into(),
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.05, 0.08, 0.05)),
+                    Anchor::TOP_LEFT,
+                    Transform::from_xyz(0.0, 0.0, 1.2),
+                ))
+                .id();
+
+            right_text_entity = parent
+                .spawn((
+                    Text2d::new(""),
+                    TextFont {
+                        font: font.into(),
+                        font_size: 18.0.into(),
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.2, 0.8, 0.2)),
+                    Anchor::TOP_LEFT,
+                    Transform::from_xyz(0.0, 0.0, 1.0),
+                ))
+                .id();
+        })
+        .insert(TerminalInputUI {
+            cursor_entity,
+            left_text_entity,
+            cursor_char_entity,
+            right_text_entity,
+        })
         .id();
 
     commands
@@ -201,9 +257,11 @@ pub fn update_terminal_history(
     let mut changed = false;
 
     for msg in messages.read() {
-        history.lines.push(msg.0.clone());
-        history.scroll = 0;
-        changed = true;
+        for line in msg.0.lines() {
+            history.lines.push(line.to_string());
+            history.scroll = 0;
+            changed = true;
+        }
     }
 
     if history.lines.len() > MAX_HISTORY {
@@ -258,46 +316,158 @@ pub fn terminal_scroll(
 
 pub fn handle_typing(
     mut key_events: MessageReader<KeyboardInput>,
-    mut terminal: Single<(&mut TerminalInput, &mut Text2d)>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut input: Single<&mut TerminalInput>,
     mut command_queue: ResMut<CommandQueue>,
+    mut print_events: MessageWriter<PrintToTerminal>,
 ) {
-    let (ref mut term_input, ref mut text) = *terminal;
-    let mut changed = false;
+    let ctrl_pressed = keyboard_input.pressed(KeyCode::ControlLeft)
+        || keyboard_input.pressed(KeyCode::ControlRight);
 
     for event in key_events.read() {
-        if event.state == ButtonState::Released {
+        if event.state != ButtonState::Pressed {
             continue;
+        }
+
+        if ctrl_pressed {
+            match &event.logical_key {
+                Key::Character(c) if c.eq_ignore_ascii_case("c") => {
+                    input.buffer.clear();
+                    input.cursor_pos = 0;
+                    continue;
+                }
+                Key::Character(c) if c.eq_ignore_ascii_case("u") => {
+                    let cursor_pos = input.cursor_pos;
+                    input.buffer.drain(..cursor_pos);
+                    input.cursor_pos = 0;
+                    continue;
+                }
+                _ => {}
+            }
         }
 
         match &event.logical_key {
             Key::Enter => {
-                if !term_input.buffer.is_empty() {
-                    command_queue.pending.push(term_input.buffer.clone());
+                let cmd: String = input.buffer.iter().collect();
+                let cmd = cmd.trim().to_string();
 
-                    term_input.buffer.clear();
-                    changed = true;
+                if !cmd.is_empty() {
+                    input.history.push(cmd.clone());
+                    input.history_index = input.history.len();
+                    command_queue.pending.push(cmd.clone());
                 }
+
+                input.buffer.clear();
+                input.cursor_pos = 0;
             }
             Key::Backspace => {
-                if term_input.buffer.pop().is_some() {
-                    changed = true;
+                if input.cursor_pos > 0 {
+                    input.cursor_pos -= 1;
+                    let cursor_pos = input.cursor_pos;
+                    input.buffer.remove(cursor_pos);
                 }
             }
-            Key::Character(char_str) => {
-                if !char_str.chars().any(|c| c.is_control()) {
-                    term_input.buffer.push_str(char_str.as_str());
-                    changed = true;
+            Key::Delete => {
+                if input.cursor_pos < input.buffer.len() {
+                    let cursor_pos = input.cursor_pos;
+                    input.buffer.remove(cursor_pos);
+                }
+            }
+            Key::ArrowLeft => {
+                if input.cursor_pos > 0 {
+                    input.cursor_pos -= 1;
+                }
+            }
+            Key::ArrowRight => {
+                if input.cursor_pos < input.buffer.len() {
+                    input.cursor_pos += 1;
+                }
+            }
+            Key::Home => {
+                input.cursor_pos = 0;
+            }
+            Key::End => {
+                input.cursor_pos = input.buffer.len();
+            }
+            Key::ArrowUp => {
+                if input.history_index > 0 {
+                    input.history_index -= 1;
+                    input.buffer = input.history[input.history_index].chars().collect();
+                    input.cursor_pos = input.buffer.len();
+                }
+            }
+            Key::ArrowDown => {
+                if input.history_index + 1 < input.history.len() {
+                    input.history_index += 1;
+                    input.buffer = input.history[input.history_index].chars().collect();
+                    input.cursor_pos = input.buffer.len();
+                } else if input.history_index < input.history.len() {
+                    input.history_index = input.history.len();
+                    input.buffer.clear();
+                    input.cursor_pos = 0;
                 }
             }
             Key::Space => {
-                term_input.buffer.push(' ');
-                changed = true;
+                let cursor_pos = input.cursor_pos;
+                input.buffer.insert(cursor_pos, ' ');
+                input.cursor_pos += 1;
+            }
+            Key::Character(str) => {
+                for c in str.chars() {
+                    if !c.is_control() {
+                        let cursor_pos = input.cursor_pos;
+                        input.buffer.insert(cursor_pos, c);
+                        input.cursor_pos += 1;
+                    }
+                }
             }
             _ => {}
         }
     }
+}
 
-    if changed {
-        text.0 = format!("> {}", term_input.buffer);
+pub fn update_terminal_display(
+    input_query: Query<(&TerminalInput, &TerminalInputUI)>,
+    mut text_q: Query<&mut Text2d>,
+    mut transform_q: Query<&mut Transform>,
+) {
+    const CHAR_WIDTH: f32 = 10.8;
+
+    for (input, ui) in &input_query {
+        let prompt_and_left: String = std::iter::once('>')
+            .chain(std::iter::once(' '))
+            .chain(input.buffer[..input.cursor_pos].iter().copied())
+            .collect();
+
+        let (cursor_char_str, right_str) = if input.cursor_pos < input.buffer.len() {
+            let c = input.buffer[input.cursor_pos];
+            let rest: String = input.buffer[input.cursor_pos + 1..].iter().collect();
+            (c.to_string(), rest)
+        } else {
+            (" ".to_string(), "".to_string())
+        };
+
+        let left_width = prompt_and_left.chars().count() as f32 * CHAR_WIDTH;
+        let char_width_offset = left_width + CHAR_WIDTH;
+
+        if let Ok(mut text) = text_q.get_mut(ui.left_text_entity) {
+            text.0 = prompt_and_left;
+        }
+        if let Ok(mut text) = text_q.get_mut(ui.cursor_char_entity) {
+            text.0 = cursor_char_str;
+        }
+        if let Ok(mut text) = text_q.get_mut(ui.right_text_entity) {
+            text.0 = right_str;
+        }
+
+        if let Ok(mut transform) = transform_q.get_mut(ui.cursor_char_entity) {
+            transform.translation.x = left_width;
+        }
+        if let Ok(mut transform) = transform_q.get_mut(ui.right_text_entity) {
+            transform.translation.x = char_width_offset;
+        }
+        if let Ok(mut transform) = transform_q.get_mut(ui.cursor_entity) {
+            transform.translation.x = left_width;
+        }
     }
 }

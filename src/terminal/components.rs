@@ -21,10 +21,7 @@ pub struct TerminalHistory {
 impl Default for TerminalHistory {
     fn default() -> Self {
         Self {
-            lines: vec![
-                "FLOCK TERM v0.1.0".into(),
-                "Type 'help' for commands.".into(),
-            ],
+            lines: vec!["Type 'help' for commands.".into()],
             scroll: 0,
         }
     }
@@ -32,8 +29,28 @@ impl Default for TerminalHistory {
 
 #[derive(Component, Default)]
 pub struct TerminalInput {
-    pub buffer: String,
+    pub buffer: Vec<char>,
+    pub cursor_pos: usize,
+    pub history: Vec<String>,
+    pub history_index: usize,
 }
+
+#[derive(Component)]
+pub struct TerminalInputUI {
+    pub cursor_entity: Entity,
+    pub left_text_entity: Entity,
+    pub cursor_char_entity: Entity,
+    pub right_text_entity: Entity,
+}
+
+#[derive(Component)]
+pub struct TerminalLeftText;
+
+#[derive(Component)]
+pub struct TerminalCursorCharText;
+
+#[derive(Component)]
+pub struct TerminalRightText;
 
 #[derive(Resource, Default)]
 pub struct CommandQueue {
